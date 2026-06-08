@@ -21,9 +21,48 @@ import csv
 import os
 import sys
 from collections import defaultdict
+from datetime import datetime
+import re
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
+
+
+def parse_date(date_str):
+    if not date_str:
+        return None
+    date_str = str(date_str).strip()
+    if not date_str or date_str.lower() in ('nan', 'none', ''):
+        return None
+    # Try explicit formats
+    for fmt in ('%d %b %Y', '%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%b %Y', '%d %B %Y'):
+        try:
+            return datetime.strptime(date_str, fmt)
+        except ValueError:
+            pass
+    # Fallback parsing logic
+    parts = re.split(r'[-/\s]+', date_str)
+    year = None
+    for p in parts:
+        if p.isdigit() and len(p) == 4:
+            year = int(p)
+            break
+    if year:
+        months = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+                  'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12}
+        month = 6
+        for p in parts:
+            p_low = p.lower()[:3]
+            if p_low in months:
+                month = months[p_low]
+                break
+            elif p.isdigit() and 1 <= int(p) <= 12:
+                month = int(p)
+        try:
+            return datetime(year, month, 1)
+        except Exception:
+            pass
+    return None
 
 
 def read_and_classify(csv_path):
@@ -36,7 +75,7 @@ def read_and_classify(csv_path):
     # Extract client code and name from the first data row
     cl_code = None
     cl_name = None
-    fy_year = None
+    fy_counts = defaultdict(int)
 
     with open(csv_path, 'r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
@@ -55,6 +94,12 @@ def read_and_classify(csv_path):
             buy_val = float(row['BuyValue'])
             sell_qty = float(row['sellQty'])
             sell_val = float(row['SellValue'])
+
+            # Determine transaction date and track FY
+            dt = parse_date(row.get('SellDate')) or parse_date(row.get('BuyDate'))
+            if dt:
+                fy = f"{dt.year}-{str(dt.year+1)[-2:]}" if dt.month >= 4 else f"{dt.year-1}-{str(dt.year)[-2:]}"
+                fy_counts[fy] += 1
 
             if stp != 0:
                 short_term[name]['BuyQty'] += buy_qty
@@ -77,14 +122,18 @@ def read_and_classify(csv_path):
                 squaring[name]['SellValue'] += sell_val
                 squaring[name]['Profit'] += sqp
 
-    # Derive financial year from CSV filename
-    basename = os.path.basename(csv_path)
-    if '20242025' in basename:
-        fy_year = '2024-25'
-    elif '20232024' in basename:
-        fy_year = '2023-24'
+    # Derive financial year from transaction dates if possible
+    if fy_counts:
+        fy_year = max(fy_counts, key=fy_counts.get)
     else:
-        fy_year = 'Unknown'
+        # Fallback to CSV filename
+        basename = os.path.basename(csv_path)
+        if '20242025' in basename:
+            fy_year = '2024-25'
+        elif '20232024' in basename:
+            fy_year = '2023-24'
+        else:
+            fy_year = '2024-25'  # default
 
     return short_term, long_term, squaring, cl_code, cl_name, fy_year
 
@@ -283,13 +332,10 @@ def write_excel(short_term, long_term, squaring, cl_code, cl_name, fy_year, outp
 def main():
     # Default paths
     input_csv = 'orginal/CapitalGain_20242025.csv'
-    output_xlsx = 'output/CapitalGain_2024-25_Classified.xlsx'
 
-    # Allow overrides via command line
+    # Allow override of input CSV via command line
     if len(sys.argv) >= 2:
         input_csv = sys.argv[1]
-    if len(sys.argv) >= 3:
-        output_xlsx = sys.argv[2]
 
     if not os.path.exists(input_csv):
         print(f"Error: Input file not found: {input_csv}")
@@ -297,6 +343,13 @@ def main():
 
     print(f"Reading: {input_csv}")
     short_term, long_term, squaring, cl_code, cl_name, fy_year = read_and_classify(input_csv)
+
+    # Determine output XLSX path (dynamic or command-line override)
+    if len(sys.argv) >= 3:
+        output_xlsx = sys.argv[2]
+    else:
+        output_xlsx = f'output/CapitalGain_{fy_year}_Classified.xlsx'
+
     write_excel(short_term, long_term, squaring, cl_code, cl_name, fy_year, output_xlsx)
 
 

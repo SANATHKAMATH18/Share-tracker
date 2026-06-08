@@ -178,6 +178,60 @@ st.markdown("""
 
 # ─────────────────────────── Helper Functions ───────────────────────────
 
+def detect_fy_from_csv(csv_content):
+    import re
+    from datetime import datetime
+    
+    fy_counts = defaultdict(int)
+    
+    def parse_date(date_str):
+        if not date_str:
+            return None
+        date_str = str(date_str).strip()
+        if not date_str or date_str.lower() in ('nan', 'none', ''):
+            return None
+        # Try explicit formats
+        for fmt in ('%d %b %Y', '%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%b %Y', '%d %B %Y'):
+            try:
+                return datetime.strptime(date_str, fmt)
+            except ValueError:
+                pass
+        # Fallback parsing logic
+        parts = re.split(r'[-/\s]+', date_str)
+        year = None
+        for p in parts:
+            if p.isdigit() and len(p) == 4:
+                year = int(p)
+                break
+        if year:
+            months = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+                      'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12}
+            month = 6
+            for p in parts:
+                p_low = p.lower()[:3]
+                if p_low in months:
+                    month = months[p_low]
+                    break
+                elif p.isdigit() and 1 <= int(p) <= 12:
+                    month = int(p)
+            try:
+                return datetime(year, month, 1)
+            except Exception:
+                pass
+        return None
+
+    reader = csv.DictReader(io.StringIO(csv_content))
+    for row in reader:
+        dt = parse_date(row.get('SellDate')) or parse_date(row.get('BuyDate'))
+        if dt:
+            fy = f"{dt.year}-{str(dt.year+1)[-2:]}" if dt.month >= 4 else f"{dt.year-1}-{str(dt.year)[-2:]}"
+            fy_counts[fy] += 1
+            
+    if fy_counts:
+        return max(fy_counts, key=fy_counts.get)
+    return "2024-25"
+
+
 def read_and_classify(csv_content):
     """Read CSV content and aggregate into Short Term, Long Term, and Squaring buckets."""
     short_term = defaultdict(lambda: {'BuyQty': 0, 'BuyValue': 0, 'SellQty': 0, 'SellValue': 0, 'Profit': 0})
@@ -444,9 +498,18 @@ def main():
 
         if uploaded_file:
             st.success(f"Loaded: **{uploaded_file.name}**")
+            
+            # Detect FY from CSV content
+            try:
+                file_bytes = uploaded_file.getvalue()
+                content_str = file_bytes.decode('utf-8-sig')
+                detected_fy = detect_fy_from_csv(content_str)
+            except Exception:
+                detected_fy = "2024-25"
+                
             st.markdown("---")
             st.markdown("### Settings")
-            fy_year = st.text_input("Financial Year", value="2024-25", help="e.g., 2024-25")
+            fy_year = st.text_input("Financial Year", value=detected_fy, help="e.g., 2024-25")
         else:
             fy_year = "2024-25"
 
@@ -551,12 +614,21 @@ def main():
     # ─── Download Excel Report ───
     excel_bytes = generate_excel(short_term, long_term, squaring, cl_code, cl_name, fy_year)
 
+    # Generate dynamic filename matching user format: e.g. BSWS024_CapitalGain_2025_26_.xlsx
+    if cl_code:
+        clean_cl_code = cl_code.split('-')[0].strip()
+        formatted_fy = fy_year.replace('-', '_')
+        download_filename = f"{clean_cl_code}_CapitalGain_{formatted_fy}_.xlsx"
+    else:
+        formatted_fy = fy_year.replace('-', '_')
+        download_filename = f"CapitalGain_{formatted_fy}_Classified.xlsx"
+
     dl1, dl2, _ = st.columns([1, 1, 2])
     with dl1:
         st.download_button(
             label="📥 Download Classified Excel Report",
             data=excel_bytes,
-            file_name=f"CapitalGain_{fy_year}_Classified.xlsx",
+            file_name=download_filename,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
