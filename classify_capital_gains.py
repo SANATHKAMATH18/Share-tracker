@@ -35,7 +35,7 @@ def parse_date(date_str):
     if not date_str or date_str.lower() in ('nan', 'none', ''):
         return None
     # Try explicit formats
-    for fmt in ('%d %b %Y', '%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%b %Y', '%d %B %Y'):
+    for fmt in ('%d-%b-%y', '%d-%b-%Y', '%d %b %Y', '%d %b %y', '%Y-%m-%d', '%d-%m-%Y', '%d-%m-%y', '%d/%m/%Y', '%d/%m/%y', '%b %Y', '%d %B %Y'):
         try:
             return datetime.strptime(date_str, fmt)
         except ValueError:
