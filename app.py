@@ -229,6 +229,8 @@ def detect_fy_from_csv(csv_content):
 
     reader = csv.DictReader(io.StringIO(csv_content))
     for row in reader:
+        # Clean keys to remove potential quotes (e.g. 'scrip_name' vs "'scrip_name'") and whitespace
+        row = {k.strip().replace("'", "").replace('"', ''): v for k, v in row.items() if k is not None}
         dt = parse_date(row.get('SellDate')) or parse_date(row.get('BuyDate'))
         if dt:
             fy = f"{dt.year}-{str(dt.year+1)[-2:]}" if dt.month >= 4 else f"{dt.year-1}-{str(dt.year)[-2:]}"
@@ -253,6 +255,9 @@ def read_and_classify(csv_content):
 
     reader = csv.DictReader(io.StringIO(csv_content))
     for row in reader:
+        # Clean keys to remove potential quotes (e.g. 'scrip_name' vs "'scrip_name'") and whitespace
+        row = {k.strip().replace("'", "").replace('"', ''): v for k, v in row.items() if k is not None}
+        
         if cl_code is None:
             cl_code = row.get('ClCode', '').strip()
             cl_name = row.get('ClName', '').strip()
@@ -524,13 +529,7 @@ def main():
         else:
             fy_year = "2024-25"
 
-        st.markdown("---")
-        st.markdown(
-            "<div style='text-align:center; color:#8892b0; font-size:0.75rem;'>"
-            "Built for SRINIVASA RAO G<br>Capital Gains Tax Reporting"
-            "</div>",
-            unsafe_allow_html=True,
-        )
+        pass
 
     # ─── No file uploaded ───
     if not uploaded_file:

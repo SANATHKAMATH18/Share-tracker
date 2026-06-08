@@ -98,6 +98,9 @@ def read_and_classify(csv_path):
 
     try:
         for row in reader:
+            # Clean keys to remove potential quotes (e.g. 'scrip_name' vs "'scrip_name'") and whitespace
+            row = {k.strip().replace("'", "").replace('"', ''): v for k, v in row.items() if k is not None}
+            
             # Capture client info from first row
             if cl_code is None:
                 cl_code = row.get('ClCode', '').strip()
