@@ -100,6 +100,8 @@ def read_and_classify(csv_path):
         for row in reader:
             # Clean keys to remove potential quotes (e.g. 'scrip_name' vs "'scrip_name'") and whitespace
             row = {k.strip().replace("'", "").replace('"', ''): v for k, v in row.items() if k is not None}
+            if not row or 'scrip_name' not in row or not row['scrip_name']:
+                continue
             
             # Capture client info from first row
             if cl_code is None:
