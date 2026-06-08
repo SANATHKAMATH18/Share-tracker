@@ -569,6 +569,11 @@ def main():
         
     short_term, long_term, squaring, cl_code, cl_name, all_rows = read_and_classify(csv_content)
 
+    if not all_rows:
+        st.warning("⚠️ No valid transactions found in the uploaded file. Please make sure you are uploading the raw Capital Gains statement from your broker, not an already classified report.")
+        st.info("Expected columns: `scrip_code`, `isin`, `scrip_name`, `BuyDate`, `BuyQty`, `BuyRate`, `BuyValue`, `Descer`, `SellDate`, `sellQty`, `SellRate`, `SellValue`, `ShortTermProfit`, `LongTermProfit`, `SquringProfit`, `Fair_rate`, `ClCode`, `ClName`")
+        return
+
     st_total = compute_grand_total(short_term)
     lt_total = compute_grand_total(long_term)
     sq_total = compute_grand_total(squaring)
