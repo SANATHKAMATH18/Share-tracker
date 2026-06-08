@@ -35,7 +35,14 @@ def parse_date(date_str):
     if not date_str or date_str.lower() in ('nan', 'none', ''):
         return None
     # Try explicit formats
-    for fmt in ('%d-%b-%y', '%d-%b-%Y', '%d %b %Y', '%d %b %y', '%Y-%m-%d', '%d-%m-%Y', '%d-%m-%y', '%d/%m/%Y', '%d/%m/%y', '%b %Y', '%d %B %Y'):
+    for fmt in (
+        '%d-%b-%y', '%d-%b-%Y', '%d %b %Y', '%d %b %y', 
+        '%Y-%m-%d', '%d-%m-%Y', '%d-%m-%y', '%d/%m/%Y', '%d/%m/%y', 
+        '%b %Y', '%d %B %Y',
+        '%Y-%m-%d %H:%M:%S', '%d-%b-%y %H:%M:%S', '%d-%b-%Y %H:%M:%S',
+        '%d/%m/%Y %H:%M:%S', '%d/%m/%y %H:%M:%S', '%d-%m-%Y %H:%M:%S',
+        '%d-%m-%y %H:%M:%S'
+    ):
         try:
             return datetime.strptime(date_str, fmt)
         except ValueError:
@@ -66,7 +73,7 @@ def parse_date(date_str):
 
 
 def read_and_classify(csv_path):
-    """Read the CSV and aggregate data into Short Term, Long Term, and Squaring buckets."""
+    """Read the CSV or Excel and aggregate data into Short Term, Long Term, and Squaring buckets."""
 
     short_term = defaultdict(lambda: {'BuyQty': 0, 'BuyValue': 0, 'SellQty': 0, 'SellValue': 0, 'Profit': 0})
     long_term = defaultdict(lambda: {'BuyQty': 0, 'BuyValue': 0, 'SellQty': 0, 'SellValue': 0, 'Profit': 0})
@@ -77,8 +84,19 @@ def read_and_classify(csv_path):
     cl_name = None
     fy_counts = defaultdict(int)
 
-    with open(csv_path, 'r', encoding='utf-8-sig') as f:
+    # Check file type and read accordingly
+    if csv_path.lower().endswith('.xlsx'):
+        import pandas as pd
+        import io
+        df = pd.read_excel(csv_path)
+        csv_file = io.StringIO(df.to_csv(index=False))
+        reader = csv.DictReader(csv_file)
+        f = None
+    else:
+        f = open(csv_path, 'r', encoding='utf-8-sig')
         reader = csv.DictReader(f)
+
+    try:
         for row in reader:
             # Capture client info from first row
             if cl_code is None:
@@ -121,6 +139,9 @@ def read_and_classify(csv_path):
                 squaring[name]['SellQty'] += sell_qty
                 squaring[name]['SellValue'] += sell_val
                 squaring[name]['Profit'] += sqp
+    finally:
+        if f is not None:
+            f.close()
 
     # Derive financial year from transaction dates if possible
     if fy_counts:

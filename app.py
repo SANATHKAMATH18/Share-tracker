@@ -191,7 +191,14 @@ def detect_fy_from_csv(csv_content):
         if not date_str or date_str.lower() in ('nan', 'none', ''):
             return None
         # Try explicit formats
-        for fmt in ('%d-%b-%y', '%d-%b-%Y', '%d %b %Y', '%d %b %y', '%Y-%m-%d', '%d-%m-%Y', '%d-%m-%y', '%d/%m/%Y', '%d/%m/%y', '%b %Y', '%d %B %Y'):
+        for fmt in (
+            '%d-%b-%y', '%d-%b-%Y', '%d %b %Y', '%d %b %y', 
+            '%Y-%m-%d', '%d-%m-%Y', '%d-%m-%y', '%d/%m/%Y', '%d/%m/%y', 
+            '%b %Y', '%d %B %Y',
+            '%Y-%m-%d %H:%M:%S', '%d-%b-%y %H:%M:%S', '%d-%b-%Y %H:%M:%S',
+            '%d/%m/%Y %H:%M:%S', '%d/%m/%y %H:%M:%S', '%d-%m-%Y %H:%M:%S',
+            '%d-%m-%y %H:%M:%S'
+        ):
             try:
                 return datetime.strptime(date_str, fmt)
             except ValueError:
@@ -490,19 +497,23 @@ def main():
         st.markdown("Upload your **CapitalGain CSV** file exported from your broker.")
 
         uploaded_file = st.file_uploader(
-            "Choose a CSV file",
-            type=['csv'],
-            help="Upload the CapitalGain CSV file (e.g., CapitalGain_20242025.csv)",
+            "Choose a CSV or Excel file",
+            type=['csv', 'xlsx'],
+            help="Upload the CapitalGain CSV or Excel file",
             label_visibility="collapsed",
         )
 
         if uploaded_file:
             st.success(f"Loaded: **{uploaded_file.name}**")
             
-            # Detect FY from CSV content
+            # Detect FY from content (supports both CSV and Excel)
             try:
-                file_bytes = uploaded_file.getvalue()
-                content_str = file_bytes.decode('utf-8-sig')
+                if uploaded_file.name.lower().endswith('.xlsx'):
+                    df = pd.read_excel(uploaded_file)
+                    content_str = df.to_csv(index=False)
+                else:
+                    file_bytes = uploaded_file.getvalue()
+                    content_str = file_bytes.decode('utf-8-sig')
                 detected_fy = detect_fy_from_csv(content_str)
             except Exception:
                 detected_fy = "2024-25"
@@ -545,8 +556,14 @@ def main():
                      "the ShortTermProfit, LongTermProfit, and SquringProfit columns.")
         return
 
-    # ─── Process uploaded file ───
-    csv_content = uploaded_file.read().decode('utf-8-sig')
+    # ─── Process uploaded file (supports both CSV and Excel) ───
+    if uploaded_file.name.lower().endswith('.xlsx'):
+        df = pd.read_excel(uploaded_file)
+        csv_content = df.to_csv(index=False)
+    else:
+        # Use getvalue() to avoid file pointer issues if read in sidebar
+        csv_content = uploaded_file.getvalue().decode('utf-8-sig')
+        
     short_term, long_term, squaring, cl_code, cl_name, all_rows = read_and_classify(csv_content)
 
     st_total = compute_grand_total(short_term)
