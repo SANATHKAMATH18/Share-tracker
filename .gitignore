@@ -215,4 +215,12 @@ marimo/_lsp/
 __marimo__/
 
 # Streamlit
-.streamlit/secrets.toml
+.streamlit/
+
+# Sensitive local data / outputs
+orginal/
+modified/
+output/
+*.csv
+*.xlsx
+*.xls
